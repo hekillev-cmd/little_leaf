@@ -1,0 +1,16 @@
+import React from "react";
+import { ArrowLeft, ArrowRight, Minus, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { Link } from "wouter";
+import { toast } from "sonner";
+import { formatPrice } from "@/lib/catalog";
+import { Illustration } from "@/components/Illustration";
+import { AdSlot, StoreFooter } from "@/components/StorePrimitives";
+import { getCartProducts, useStore } from "@/contexts/StoreContext";
+import { useI18n } from "@/contexts/I18nContext";
+
+export default function Cart() {
+  const { cart, cartCount, cartTotal, updateQuantity, removeFromCart } = useStore();
+  const items = getCartProducts(cart);
+  const { t, localizeProduct } = useI18n();
+  return <div className="store-shell"><main className="inner-page"><div className="container breadcrumb"><Link href="/">{t.backHome}</Link><ArrowRight size={14} /><span>{t.yourCart}</span></div><section className="container cart-heading"><div><span className="eyebrow">{t.finishOrder}</span><h1>{t.yourCart}</h1></div><span className="cart-count-label">{cartCount} · {t.allProducts}</span></section>{items.length === 0 ? <section className="container empty-cart"><div className="empty-cart-art"><Illustration kind="stickers" /></div><div><span className="eyebrow">{t.cartEmpty}</span><h2>{t.cartEmpty}</h2><p>{t.browseProducts}</p><Link href="/category/all" className="button-primary">{t.browseProducts} <ArrowLeft size={17} /></Link></div></section> : <section className="container cart-layout"><div className="cart-items"><div className="cart-list-header"><span>{t.allProducts}</span><span>{t.quantity}</span><span>{t.subtotal}</span></div>{items.map((product) => { const viewProduct = localizeProduct(product); return <div className="cart-row" key={product.id}><div className="cart-product"><div className="cart-thumb"><Illustration kind={product.cover} compact /></div><div><Link href={`/product/${product.id}`}>{viewProduct.title}</Link><small>{viewProduct.subtitle} · {product.pages}</small></div></div><div className="quantity-control"><button type="button" onClick={() => updateQuantity(product.id, (cart[product.id] || 1) - 1)} aria-label={t.quantity}><Minus size={14} /></button><span>{cart[product.id]}</span><button type="button" onClick={() => updateQuantity(product.id, (cart[product.id] || 0) + 1)} aria-label={t.quantity}><Plus size={14} /></button></div><div className="cart-row-total"><strong>{formatPrice(product.price * (cart[product.id] || 0))}</strong><button type="button" onClick={() => { removeFromCart(product.id); toast.info(t.saved); }} aria-label={`${t.saved} ${viewProduct.title}`}><Trash2 size={15} /></button></div></div>; })}</div><aside className="cart-summary"><span className="eyebrow">{t.orderSummary}</span><h2>{t.ready}</h2><div className="summary-line"><span>{t.subtotal}</span><strong>{formatPrice(cartTotal)}</strong></div><div className="summary-line"><span>{t.shipping}</span><strong>{t.instant}</strong></div><div className="summary-total"><span>{t.allProducts}</span><strong>{formatPrice(cartTotal)}</strong></div><Link href="/checkout" className="button-primary button-wide">{t.continuePayment} <ArrowLeft size={17} /></Link><p className="summary-safe"><ShieldCheck size={15} /> {t.demoPayment}</p></aside></section>}<section className="container bottom-ad"><AdSlot label={t.cart} /></section></main><StoreFooter /></div>;
+}

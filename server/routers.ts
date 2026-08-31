@@ -3,11 +3,13 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, publicProcedure, router } from "./_core/trpc";
+import { createAdminToken, ADMIN_COOKIE_NAME } from "./_core/adminAuth";
 import { z } from "zod";
 import { getDb, createStoreOrder, getStoreOrderByOrderId, getStoreProductsByIds, updateStoreOrderPayment } from "./db";
 import { storageGetSignedUrl, storagePut } from "./storage";
 import { storeProducts } from "../drizzle/schema";
 import { createCryptomusInvoice, isCryptomusConfigured, type CryptomusNetwork } from "./cryptomus";
+import bcrypt from "bcrypt";
 
 const checkoutNetwork = z.enum(["TRC20", "BEP20", "ERC20", "SOL", "ARB"]);
 const cryptomusNetwork: Record<z.infer<typeof checkoutNetwork>, CryptomusNetwork> = {
@@ -28,20 +30,47 @@ const getPublicOrigin = (req: { protocol: string; get: (name: string) => string 
 export const appRouter = router({
   system: systemRouter,
   auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
-    logout: publicProcedure.mutation(({ ctx }) => {
+    me: publicProcedure.query(() => null),
+   logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
   }),
+  admin: router({
+    login: publicProcedure
+  .input(z.object({ password: z.string().min(1) }))
+  .mutation(async ({ input, ctx }) => {
+    const hash = process.env.ADMIN_PASSWORD_HASH;
+    if (!hash) {
+      throw new TRPCError({ code: "UNAUTHORIZED", message: "كلمة السر غير صحيحة" });
+    }
+    const isValid = await bcrypt.compare(input.password, hash);
+    if (!isValid) {
+      throw new TRPCError({ code: "UNAUTHORIZED", message: "كلمة السر غير صحيحة" });
+    }
+    const token = await createAdminToken();
+    ctx.res.cookie(ADMIN_COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      path: "/",
+    });
+    return { success: true } as const;
+  }),
+  logout: publicProcedure.mutation(({ ctx }) => {
+    ctx.res.clearCookie(ADMIN_COOKIE_NAME, { path: "/" });
+    return { success: true } as const;
+  }),
+}),
   products: router({
     publish: adminProcedure.input(z.object({ title: z.string().min(1).max(240), category: z.string().min(1).max(120), price: z.string().regex(/^\\d+(\\.\\d{1,2})?$/), coverName: z.string().min(1), coverType: z.string().min(1), coverBase64: z.string().min(1), fileName: z.string().min(1), fileType: z.string().min(1), fileBase64: z.string().min(1) })).mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database unavailable");
-      const cover = await storagePut(`products/${ctx.user.id}/${input.coverName}`, Buffer.from(input.coverBase64, "base64"), input.coverType);
-      const file = await storagePut(`products/${ctx.user.id}/${input.fileName}`, Buffer.from(input.fileBase64, "base64"), input.fileType);
-      const result = await db.insert(storeProducts).values({ ownerId: ctx.user.id, title: input.title, category: input.category, price: input.price, coverKey: cover.key, coverUrl: cover.url, fileKey: file.key, fileUrl: file.url });
+      const cover = await storagePut(`products/admin/${input.coverName}`, Buffer.from(input.coverBase64, "base64"), input.coverType);
+      const file = await storagePut(`products/admin/${input.fileName}`, Buffer.from(input.fileBase64, "base64"), input.fileType);
+      const result = await db.insert(storeProducts).values({ ownerId: 1, title: input.title, category: input.category, price: input.price, coverKey: cover.key, coverUrl: cover.url, fileKey: file.key, fileUrl: file.url });
       return { id: Number(result[0].insertId), coverUrl: cover.url, fileUrl: file.url };
     }),
   }),

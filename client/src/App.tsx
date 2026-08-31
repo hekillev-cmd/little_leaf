@@ -17,6 +17,7 @@ import Search from "./pages/Search";
 import Studio from "./pages/Studio";
 import { LegalRoute } from "./pages/Legal";
 import Settings from "./pages/Settings";
+import AdminLogin from "./pages/AdminLogin";
 
 function Router() {
   const [location] = useLocation();
@@ -33,6 +34,7 @@ function Router() {
       <Route path="/search" component={Search} />
       <Route path="/studio" component={Studio} />
       <Route path="/legal/:kind" component={LegalRoute} />
+      <Route path="/admin/login" component={AdminLogin} />
       <Route path="/settings" component={Settings} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
